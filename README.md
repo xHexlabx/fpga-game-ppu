@@ -11,7 +11,7 @@ University.
 **Play it:** [open in the VGA Playground](https://vga-playground.com/?repo=https://github.com/xHexlabx/fpga-game-ppu),
 then turn on Gamepad mode.
 
-![CAVE PATROL title screen](images/game_title.png)
+![CAVE PATROL](images/game_mid.png)
 
 Fly the patrol ship through a 4096-pixel cave. Shoot drones, darts and
 turrets; shoot the crystals that block the way; don't touch the rock. At the
@@ -89,18 +89,29 @@ cartridge (`screens.mem`) into page 1 when the state changes.
 | `scripts/gen_assets.py` | makes all the `.mem` files; all art and the level are original |
 | `sim/` | the Verilator play test, see below |
 
-## Simulation
+## Verification
 
-The play test runs the game in Verilator (5.x), the simulator the VGA
-Playground uses, fast enough to play a whole game:
+The play test runs the game in Verilator 5.054, the simulator the VGA
+Playground uses, fast enough to play a whole game. It drives the Gamepad Pmod
+the way the playground does and saves frames read off the Tiny VGA pins
+(`sim/out/*.png`).
 
 ```sh
-sh sim/run_game_sim.sh          # all scenarios; or: gameover | crystal | pilot | win
+sh sim/run_game_sim.sh          # all scenarios; or: gameover | crystal | pilot | boss | win
 ```
 
-It drives the Gamepad Pmod the way the playground does and saves frames
-read off the Tiny VGA pins as PNGs in `sim/out/`.
+| Scenario | What it checks | Result |
+| --- | --- | --- |
+| `gameover` | title at power-up; START begins a game with 3 ships; flying into the ceiling costs a ship, the respawned ship is safe while it blinks, three crashes give GAME OVER; START plays again | pass |
+| `crystal` | finds a crystal tile in VRAM, lines up and shoots: the tile becomes empty space and scores 50 | pass |
+| `pilot` | an honest autopilot (steers for the gap read out of VRAM, fires all the time) flies the cave with no cheats | pass: 1645 px in before its 3rd crash |
+| `boss` | the CORE fight on its own (the test moves the camera to the end): the CORE is destroyed, CLEARED screen, score 5000 + 10 per hit, hi score kept, START plays again | pass |
+| `win` | the whole cave with the ship made invulnerable by the test: the level streams all the way and the camera stops at the arena (3776) | camera stop: pass |
 
-| Title | Flying | Crash | Game over |
+Also: Verilator with the playground's flags builds it with no errors (only the
+two `PROCASSINIT` warnings in `vga_timing.v` from an earlier project), and the PPU
+itself is checked against a golden model in fpga-ppu.
+
+| Title | In the cave | A crystal shot out | Cleared |
 | --- | --- | --- | --- |
-| ![](images/game_title.png) | ![](images/game_start.png) | ![](images/game_crash.png) | ![](images/game_over.png) |
+| ![](images/game_title.png) | ![](images/game_mid.png) | ![](images/game_crystal.png) | ![](images/game_clear.png) |

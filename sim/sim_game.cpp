@@ -161,8 +161,10 @@ static uint16_t autopilot(bool boss_mode) {
     }
     if (py + 2 < target) b |= B_DOWN;
     else if (py > target + 2) b |= B_UP;
-    if (px < 40) b |= B_RIGHT;
-    else if (px > 56) b |= B_LEFT;
+    bool at_core = boss_mode && G(bst) != 0;
+    int x_lo = at_core ? 196 : 40, x_hi = at_core ? 212 : 56;
+    if (px < x_lo) b |= B_RIGHT;
+    else if (px > x_hi) b |= B_LEFT;
     return b;
 }
 
@@ -232,8 +234,7 @@ static void scenario_win() {
         next_frame();
         frames_play++;
         if (!shot_fight && G(camx) >= 2000) { capture("game_deep"); shot_fight = true; }
-        if (!shot_boss && G(bst) == 2 && G(bhp) < 24) { capture("game_boss"); shot_boss = true; }
-        if (G(bst) == 3 && G(btimer) == 20) capture("game_boss_down");
+        if (!shot_boss && G(bst) == 2 && G(bhp) < 24) shot_boss = true;
     }
     (void)crystals_at_start; (void)crystal_gone;
     cheat_invuln = false;
@@ -244,8 +245,6 @@ static void scenario_win() {
     check("the CORE is destroyed and the cave CLEARED", G(gstate) == G_CLEAR);
     check("score counts up", bcd(G(score)) > 5000);
     check("hi score keeps the best score", G(hi) == G(score));
-    frames_n(2);
-    capture("game_clear");
 }
 
 static void scenario_crystal() {
@@ -295,6 +294,40 @@ static void scenario_crystal() {
     check("found and shot a crystal", false);
 }
 
+static void scenario_boss() {
+    printf("--- boss (camera moved to the end by the test, ship invulnerable)\n");
+    reset();
+    frames_n(3);
+    press(B_START);
+    G(camx) = 3700;
+    G(sp_ptr) = 127;
+    cheat_invuln = true;
+    bool shot = false;
+    int f = 0;
+    for (; f < 3000 && G(gstate) == G_PLAY; f++) {
+        pad_buttons = autopilot(true);
+        next_frame();
+        if (!shot && G(bst) == 2 && G(bhp) <= 16) {
+            cheat_invuln = false;               // let the ship show in the picture
+            G(pinv) = 0;
+            capture("game_boss");
+            cheat_invuln = true;
+            shot = true;
+        }
+    }
+    cheat_invuln = false;
+    pad_buttons = 0;
+    printf("info state %d after %d frames, CORE hp %d, score %u, hi %u\n", (int)G(gstate), f,
+           (int)G(bhp), bcd(G(score)), bcd(G(hi)));
+    check("the CORE is destroyed and the cave CLEARED", G(gstate) == G_CLEAR);
+    check("destroying the CORE scores 5000 + 10 per hit", bcd(G(score)) >= 5000 + 31 * 10);
+    check("hi score keeps the best score", G(hi) == G(score));
+    frames_n(2);
+    capture("game_clear");
+    press(B_START);
+    check("START from CLEARED begins a new game", G(gstate) == G_PLAY && G(ships) == 3);
+}
+
 int main(int argc, char** argv) {
     Verilated::commandArgs(argc, argv);
     top = new Vtt_um_hextex_cavepatrol;
@@ -302,6 +335,7 @@ int main(int argc, char** argv) {
     if (which == "all" || which == "gameover") scenario_gameover();
     if (which == "all" || which == "crystal") scenario_crystal();
     if (which == "all" || which == "pilot") scenario_pilot();
+    if (which == "all" || which == "boss") scenario_boss();
     if (which == "all" || which == "win") scenario_win();
     top->final();
     delete top;
